@@ -1,0 +1,14 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y curl build-essential pkg-config libudev-dev libssl-dev && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.87.0
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Install Solana CLI + Anchor
+RUN cargo install cargo-build-sbf --locked
+RUN cargo install --git https://github.com/coral-xyz/anchor --tag v0.31.1 anchor-cli --locked
+
+WORKDIR /workdir
