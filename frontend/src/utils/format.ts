@@ -26,3 +26,11 @@ export function percentToBps(percent: number): number {
 export function bpsToPercent(bps: number): number {
   return bps / 100;
 }
+
+/**
+ * Format a raw amount given the chain's native decimals.
+ * SOL/SUI: 9 decimals (lamports/MIST), EVM: 18 decimals (wei).
+ */
+export function formatNativeAmount(raw: number, decimals: number): string {
+  return (raw / Math.pow(10, decimals)).toFixed(4);
+}

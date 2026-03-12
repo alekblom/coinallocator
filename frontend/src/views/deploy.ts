@@ -3,24 +3,32 @@ import { navigate } from '../router';
 import { $ } from '../utils/dom';
 import { truncateAddress, percentToBps } from '../utils/format';
 import { initiatePayment } from '../utils/stripe';
-import { buildCreateSplitTx } from '../solana/program';
-import { deriveSplitPDA, nameToBytes } from '../solana/pda';
-import { signAndSendTransaction } from '../wallet/adapter';
 import { showToast } from '../components/toast';
 import { SPLIT_COLORS, EXPLORER_URL, SOLANA_NETWORK, PLATFORM_FEE } from '../constants';
-import { PublicKey } from '@solana/web3.js';
+import { getActiveChain, getNativeToken, getNativeExplorerUrl } from '../chain/manager';
+import { isEvmChain } from '../evm/networks';
+import { saveLabels } from '../utils/labels';
+
+function getChainDisplayName(chain: string): string {
+  switch (chain) {
+    case 'sui': return 'Sui testnet';
+    case 'ethereum': return 'Ethereum Sepolia';
+    case 'base': return 'Base Sepolia';
+    case 'polygon': return 'Polygon Amoy';
+    default: return `Solana ${SOLANA_NETWORK}`;
+  }
+}
 
 export function renderDeploy(outlet: HTMLElement): (() => void) | void {
-  const { split, wallet } = store.getState();
+  const { split } = store.getState();
 
-  if (!split.recipients.length || !wallet.publicKey) {
+  if (!split.recipients.length) {
     navigate('/configure');
     return;
   }
 
-  // Derive PDA
-  const nameBytes = nameToBytes(split.name);
-  const [splitPda] = deriveSplitPDA(new PublicKey(wallet.publicKey), nameBytes);
+  const chain = getActiveChain();
+  const chainDisplay = getChainDisplayName(chain);
 
   render();
 
@@ -30,7 +38,7 @@ export function renderDeploy(outlet: HTMLElement): (() => void) | void {
     outlet.innerHTML = `
       <div class="deploy-page fade-in">
         <h1>Deploy Your Split</h1>
-        <p class="deploy-subtitle">Review and deploy your fund-splitting contract to Solana.</p>
+        <p class="deploy-subtitle">Review and deploy your fund-splitting contract to ${chainDisplay}.</p>
 
         <div class="deploy-steps">
           <div class="deploy-step ${step === 'preview' ? 'active' : ['payment', 'deploying', 'done'].includes(step) ? 'done' : ''}">
@@ -82,11 +90,7 @@ export function renderDeploy(outlet: HTMLElement): (() => void) | void {
         </div>
         <div class="deploy-detail">
           <span class="deploy-detail-label">Network</span>
-          <span class="deploy-detail-value">${SOLANA_NETWORK}</span>
-        </div>
-        <div class="deploy-detail">
-          <span class="deploy-detail-label">Split Address</span>
-          <span class="deploy-detail-value">${truncateAddress(splitPda.toBase58(), 6)}</span>
+          <span class="deploy-detail-value">${chainDisplay}</span>
         </div>
         <div class="deploy-detail">
           <span class="deploy-detail-label">Recipients</span>
@@ -101,7 +105,10 @@ export function renderDeploy(outlet: HTMLElement): (() => void) | void {
           <h3 style="margin-bottom: var(--space-3)">Recipients</h3>
           ${split.recipients.map((r, i) => `
             <div class="deploy-recipient">
-              <span class="deploy-recipient-address" style="color: ${SPLIT_COLORS[i]}">${truncateAddress(r.address, 6)}</span>
+              <div>
+                ${r.label ? `<span class="deploy-recipient-label">${r.label}</span>` : ''}
+                <span class="deploy-recipient-address" style="color: ${SPLIT_COLORS[i]}">${truncateAddress(r.address, 6)}</span>
+              </div>
               <span class="deploy-recipient-share">${r.percentage}%</span>
             </div>
           `).join('')}
@@ -116,6 +123,18 @@ export function renderDeploy(outlet: HTMLElement): (() => void) | void {
 
     $('#deploy-back', content)?.addEventListener('click', () => navigate('/configure'));
     $('#deploy-pay', content)?.addEventListener('click', async () => {
+      // Ensure wallet is connected before deploying
+      if (!store.getState().wallet.connected) {
+        const { showWalletModal } = await import('../wallet/ui');
+        showWalletModal();
+        const unsub = store.subscribe('wallet', (state) => {
+          if (state.wallet.connected) {
+            unsub();
+            ($('#deploy-pay', content) as HTMLButtonElement)?.click();
+          }
+        });
+        return;
+      }
       store.update('deploy', { step: 'payment' });
       render();
       await handlePayAndDeploy();
@@ -129,7 +148,7 @@ export function renderDeploy(outlet: HTMLElement): (() => void) | void {
         <div class="payment-amount text-gradient">$${PLATFORM_FEE}</div>
         <p class="payment-desc">Processing payment...</p>
         <p class="text-muted" style="font-size: var(--font-size-xs)">
-          Payment via Stripe (stub - auto-completing for demo)
+          Charging $${PLATFORM_FEE}.00 from your Buidlings credits
         </p>
       </div>
     `;
@@ -139,7 +158,7 @@ export function renderDeploy(outlet: HTMLElement): (() => void) | void {
     content.innerHTML = `
       <div class="deploying-section">
         <div class="deploying-spinner"></div>
-        <div class="deploying-text">Deploying to Solana ${SOLANA_NETWORK}...</div>
+        <div class="deploying-text">Deploying to ${chainDisplay}...</div>
         <div class="deploying-subtext">Please approve the transaction in your wallet</div>
       </div>
     `;
@@ -147,6 +166,18 @@ export function renderDeploy(outlet: HTMLElement): (() => void) | void {
 
   function renderSuccess(content: HTMLElement): void {
     const { txSignature, splitAddress } = store.getState().deploy;
+    const explorerBase = getNativeExplorerUrl();
+
+    let txLink = '';
+    if (txSignature) {
+      if (chain === 'sui') {
+        txLink = `${explorerBase}/tx/${txSignature}`;
+      } else if (isEvmChain(chain)) {
+        txLink = `${explorerBase}/tx/${txSignature}`;
+      } else {
+        txLink = `${EXPLORER_URL}/tx/${txSignature}?cluster=${SOLANA_NETWORK}`;
+      }
+    }
 
     content.innerHTML = `
       <div class="deploy-success">
@@ -154,17 +185,21 @@ export function renderDeploy(outlet: HTMLElement): (() => void) | void {
         <div class="success-title">Split Deployed!</div>
         <div class="success-address">${splitAddress || ''}</div>
         <p class="text-muted" style="margin-bottom: var(--space-6)">
-          Your fund-splitting contract is now live on Solana ${SOLANA_NETWORK}.
+          Your fund-splitting contract is now live on ${chainDisplay}.
           Share the address above to receive funds.
         </p>
         <div class="success-actions">
-          ${txSignature ? `<a href="${EXPLORER_URL}/tx/${txSignature}?cluster=${SOLANA_NETWORK}" target="_blank" class="btn-secondary">View Transaction</a>` : ''}
+          ${txLink ? `<a href="${txLink}" target="_blank" class="btn-secondary">View Transaction</a>` : ''}
+          ${splitAddress ? `<button class="btn-secondary" id="share-payment">Share Payment Page</button>` : ''}
           <button class="btn-primary" id="goto-dashboard">Go to Dashboard</button>
         </div>
       </div>
     `;
 
     $('#goto-dashboard', content)?.addEventListener('click', () => navigate('/dashboard'));
+    $('#share-payment', content)?.addEventListener('click', () => {
+      navigate(`/split/${splitAddress}`);
+    });
   }
 
   function renderError(content: HTMLElement): void {
@@ -193,21 +228,65 @@ export function renderDeploy(outlet: HTMLElement): (() => void) | void {
       store.update('deploy', { step: 'deploying' });
       render();
 
-      const { tx, splitAddress } = await buildCreateSplitTx(
-        new PublicKey(wallet.publicKey!),
-        split.name,
-        split.recipients,
-      );
+      if (isEvmChain(chain)) {
+        const { createSplit } = await import('../evm/program');
 
-      const sig = await signAndSendTransaction(tx);
+        const wallets = split.recipients.map(r => r.address);
+        const shares = split.recipients.map(r => percentToBps(r.percentage));
+        const result = await createSplit(split.name, wallets, shares);
 
-      store.update('deploy', {
-        step: 'done',
-        txSignature: sig,
-        splitAddress: splitAddress.toBase58(),
-      });
+        store.update('deploy', {
+          step: 'done',
+          txSignature: result.txHash,
+          splitAddress: result.splitAddress,
+        });
+      } else if (chain === 'sui') {
+        const { buildCreateSplitTx } = await import('../sui/program');
+        const { signAndSendSuiTransaction } = await import('../chain/sui');
+
+        const wallets = split.recipients.map(r => r.address);
+        const shares = split.recipients.map(r => percentToBps(r.percentage));
+        const tx = buildCreateSplitTx(split.name, wallets, shares);
+
+        const digest = await signAndSendSuiTransaction(tx);
+
+        store.update('deploy', {
+          step: 'done',
+          txSignature: digest,
+          splitAddress: digest, // Sui uses digest; object ID can be resolved from events
+        });
+      } else {
+        const { buildCreateSplitTx } = await import('../solana/program');
+        const { signAndSendTransaction } = await import('../wallet/adapter');
+        const { PublicKey } = await import('@solana/web3.js');
+
+        const { tx, splitAddress } = await buildCreateSplitTx(
+          new PublicKey(store.getState().wallet.publicKey!),
+          split.name,
+          split.recipients,
+        );
+
+        const sig = await signAndSendTransaction(tx);
+
+        store.update('deploy', {
+          step: 'done',
+          txSignature: sig,
+          splitAddress: splitAddress.toBase58(),
+        });
+      }
+
       render();
       showToast('Split deployed successfully!', 'success');
+
+      // Save recipient labels to localStorage
+      const deployedAddr = store.getState().deploy.splitAddress;
+      if (deployedAddr) {
+        const labelMap: Record<string, string> = {};
+        split.recipients.forEach(r => {
+          if (r.label && r.address) labelMap[r.address] = r.label;
+        });
+        if (Object.keys(labelMap).length > 0) saveLabels(deployedAddr, labelMap);
+      }
     } catch (err: any) {
       store.update('deploy', {
         step: 'error',

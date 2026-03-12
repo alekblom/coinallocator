@@ -57,7 +57,7 @@
 
 .recipient-row {
   display: grid;
-  grid-template-columns: 1fr 120px 40px;
+  grid-template-columns: 140px 1fr 120px 40px;
   gap: var(--space-3);
   align-items: center;
   padding: var(--space-4);
@@ -65,6 +65,10 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   animation: fadeIn 0.3s ease;
+}
+
+.recipient-row .label-input input {
+  width: 100%;
 }
 
 .recipient-row .address-input {
@@ -274,8 +278,16 @@
 
 @media (max-width: 640px) {
   .recipient-row {
-    grid-template-columns: 1fr 80px 36px;
+    grid-template-columns: 1fr 1fr;
     gap: var(--space-2);
     padding: var(--space-3);
+  }
+
+  .recipient-row .label-input {
+    grid-column: 1 / -1;
+  }
+
+  .recipient-row .address-input {
+    grid-column: 1 / -1;
   }
 }

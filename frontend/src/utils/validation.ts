@@ -1,4 +1,6 @@
 import type { RecipientConfig } from '../types';
+import { getActiveChain } from '../chain/manager';
+import { isEvmChain } from '../evm/networks';
 
 const BASE58_CHARS = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
@@ -8,6 +10,28 @@ export function isValidSolanaAddress(address: string): boolean {
     if (!BASE58_CHARS.includes(char)) return false;
   }
   return true;
+}
+
+export function isValidEvmAddress(address: string): boolean {
+  return /^0x[0-9a-fA-F]{40}$/.test(address);
+}
+
+export function isValidSuiAddress(address: string): boolean {
+  return /^0x[0-9a-fA-F]{64}$/.test(address);
+}
+
+function isValidAddressForChain(address: string): boolean {
+  const chain = getActiveChain();
+  if (chain === 'sui') return isValidSuiAddress(address);
+  if (isEvmChain(chain)) return isValidEvmAddress(address);
+  return isValidSolanaAddress(address);
+}
+
+function getChainAddressLabel(): string {
+  const chain = getActiveChain();
+  if (chain === 'sui') return 'Sui';
+  if (isEvmChain(chain)) return 'EVM';
+  return 'Solana';
 }
 
 export function validateRecipients(recipients: RecipientConfig[]): {
@@ -28,18 +52,19 @@ export function validateRecipients(recipients: RecipientConfig[]): {
   }
 
   const seenAddresses = new Set<string>();
+  const chainLabel = getChainAddressLabel();
 
   for (let i = 0; i < recipients.length; i++) {
     const r = recipients[i];
 
     if (!r.address.trim()) {
       errors.push(`Recipient ${i + 1}: address is required`);
-    } else if (!isValidSolanaAddress(r.address.trim())) {
-      errors.push(`Recipient ${i + 1}: invalid Solana address`);
-    } else if (seenAddresses.has(r.address.trim())) {
+    } else if (!isValidAddressForChain(r.address.trim())) {
+      errors.push(`Recipient ${i + 1}: invalid ${chainLabel} address`);
+    } else if (seenAddresses.has(r.address.trim().toLowerCase())) {
       errors.push(`Recipient ${i + 1}: duplicate address`);
     } else {
-      seenAddresses.add(r.address.trim());
+      seenAddresses.add(r.address.trim().toLowerCase());
     }
 
     if (r.percentage <= 0 || r.percentage > 100) {

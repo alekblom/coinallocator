@@ -2,6 +2,7 @@ export interface RecipientConfig {
   id: string;
   address: string;
   percentage: number;
+  label?: string;
 }
 
 export interface DeployedSplit {
@@ -18,8 +19,11 @@ export interface DeployedSplit {
   createdAt: number;
 }
 
+export type ChainId = 'solana' | 'sui' | 'ethereum' | 'base' | 'polygon';
+
 export interface AppState {
   wallet: {
+    chain: ChainId;
     connected: boolean;
     publicKey: string | null;
     walletName: string | null;

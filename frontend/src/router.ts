@@ -1,19 +1,46 @@
 import { store } from './state';
 
-type RouteHandler = (outlet: HTMLElement) => (() => void) | void;
+type RouteHandler = (outlet: HTMLElement, params?: Record<string, string>) => (() => void) | void;
 
 interface Route {
   path: string;
   render: RouteHandler;
-  requiresWallet?: boolean;
+  requiresAuth?: boolean;
+  pattern?: RegExp;
+  paramNames?: string[];
 }
 
 const routes: Route[] = [];
 let currentCleanup: (() => void) | null = null;
 let outlet: HTMLElement | null = null;
 
-export function registerRoute(path: string, render: RouteHandler, requiresWallet = false): void {
-  routes.push({ path, render, requiresWallet });
+function compilePath(path: string): { pattern: RegExp; paramNames: string[] } | null {
+  const paramNames: string[] = [];
+  const parts = path.split('/');
+  let hasParams = false;
+
+  const regexParts = parts.map(part => {
+    if (part.startsWith(':')) {
+      hasParams = true;
+      paramNames.push(part.slice(1));
+      return '([^/]+)';
+    }
+    return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  });
+
+  if (!hasParams) return null;
+  return { pattern: new RegExp(`^${regexParts.join('/')}$`), paramNames };
+}
+
+export function registerRoute(path: string, render: RouteHandler, requiresAuth = false): void {
+  const compiled = compilePath(path);
+  routes.push({
+    path,
+    render,
+    requiresAuth,
+    pattern: compiled?.pattern,
+    paramNames: compiled?.paramNames,
+  });
 }
 
 export function navigate(path: string): void {
@@ -33,20 +60,42 @@ function resolve(): void {
   }
 
   const hash = getCurrentPath();
-  const route = routes.find(r => r.path === hash);
+
+  // Try exact match first
+  let route = routes.find(r => r.path === hash);
+  let params: Record<string, string> | undefined;
+
+  // Then try pattern match
+  if (!route) {
+    for (const r of routes) {
+      if (!r.pattern) continue;
+      const match = hash.match(r.pattern);
+      if (match) {
+        route = r;
+        params = {};
+        r.paramNames!.forEach((name, i) => {
+          params![name] = match[i + 1];
+        });
+        break;
+      }
+    }
+  }
 
   if (!route) {
     navigate('/');
     return;
   }
 
-  if (route.requiresWallet && !store.getState().wallet.connected) {
-    navigate('/');
-    return;
+  if (route.requiresAuth) {
+    const BA = (window as any).BuidlingsAuth;
+    if (typeof BA !== 'undefined' && !BA.isLoggedIn()) {
+      navigate('/');
+      return;
+    }
   }
 
   outlet.innerHTML = '';
-  const cleanup = route.render(outlet);
+  const cleanup = route.render(outlet, params);
   if (cleanup) currentCleanup = cleanup;
 }
 

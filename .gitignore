@@ -11,6 +11,10 @@ public/
 test-ledger/
 .anchor/
 
+# Sui
+contracts/sui/build/
+contracts/sui/Move.lock
+
 # Environment
 .env
 .env.local

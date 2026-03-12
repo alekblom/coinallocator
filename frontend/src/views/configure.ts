@@ -4,7 +4,16 @@ import { $ } from '../utils/dom';
 import { validateRecipients } from '../utils/validation';
 import { truncateAddress } from '../utils/format';
 import { SPLIT_COLORS, MAX_RECIPIENTS } from '../constants';
+import { getActiveChain } from '../chain/manager';
+import { isEvmChain } from '../evm/networks';
 import type { RecipientConfig } from '../types';
+
+function getAddressPlaceholder(): string {
+  const chain = getActiveChain();
+  if (chain === 'sui') return 'Sui wallet address (0x...)';
+  if (isEvmChain(chain)) return 'EVM wallet address (0x...)';
+  return 'Solana wallet address';
+}
 
 export function renderConfigure(outlet: HTMLElement): void {
   outlet.innerHTML = `
@@ -80,7 +89,7 @@ export function renderConfigure(outlet: HTMLElement): void {
     const { recipients } = store.getState().split;
     if (recipients.length >= MAX_RECIPIENTS) return;
     store.update('split', {
-      recipients: [...recipients, { id: generateId(), address: '', percentage: 0 }],
+      recipients: [...recipients, { id: generateId(), address: '', percentage: 0, label: '' }],
     });
     renderRecipients();
     updatePreview();
@@ -103,8 +112,12 @@ export function renderConfigure(outlet: HTMLElement): void {
 
     list.innerHTML = recipients.map((r, i) => `
       <div class="recipient-row" data-id="${r.id}">
+        <div class="label-input">
+          <input class="input" type="text" placeholder="Label (optional)"
+            value="${r.label || ''}" data-field="label" data-index="${i}" maxlength="24" />
+        </div>
         <div class="address-input">
-          <input class="input input-mono" type="text" placeholder="Solana wallet address"
+          <input class="input input-mono" type="text" placeholder="${getAddressPlaceholder()}"
             value="${r.address}" data-field="address" data-index="${i}" />
         </div>
         <div class="percent-input">
@@ -125,12 +138,14 @@ export function renderConfigure(outlet: HTMLElement): void {
       input.addEventListener('input', (e) => {
         const el = e.target as HTMLInputElement;
         const idx = parseInt(el.dataset.index!);
-        const field = el.dataset.field as 'address' | 'percentage';
+        const field = el.dataset.field as 'address' | 'percentage' | 'label';
         const { recipients } = store.getState().split;
         const updated = [...recipients];
 
         if (field === 'percentage') {
           updated[idx] = { ...updated[idx], percentage: parseFloat(el.value) || 0 };
+        } else if (field === 'label') {
+          updated[idx] = { ...updated[idx], label: el.value };
         } else {
           updated[idx] = { ...updated[idx], address: el.value };
         }
@@ -186,7 +201,7 @@ export function renderConfigure(outlet: HTMLElement): void {
       .map((r, i) => `
         <div class="legend-item">
           <span class="legend-dot" style="background: ${SPLIT_COLORS[i % SPLIT_COLORS.length]}"></span>
-          <span class="legend-address">${r.address ? truncateAddress(r.address, 6) : 'No address'}</span>
+          <span class="legend-address">${r.label || (r.address ? truncateAddress(r.address, 6) : 'No address')}</span>
           <span class="legend-percent">${r.percentage}%</span>
         </div>
       `).join('');

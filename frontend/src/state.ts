@@ -10,6 +10,7 @@ function generateId(): string {
 function createInitialState(): AppState {
   return {
     wallet: {
+      chain: 'solana',
       connected: false,
       publicKey: null,
       walletName: null,
@@ -18,8 +19,8 @@ function createInitialState(): AppState {
     split: {
       name: '',
       recipients: [
-        { id: generateId(), address: '', percentage: 50 },
-        { id: generateId(), address: '', percentage: 50 },
+        { id: generateId(), address: '', percentage: 50, label: '' },
+        { id: generateId(), address: '', percentage: 50, label: '' },
       ],
     },
     deploy: {
