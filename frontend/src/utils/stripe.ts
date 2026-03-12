@@ -20,7 +20,7 @@ export async function initiatePayment(): Promise<boolean> {
   if (!result.success) {
     const balance = result.balance_cents?.total ?? 0;
     throw new Error(
-      `Insufficient credits. You need $5.00, you have ${BuidlingsAuth.formatUSD(balance)}. ` +
+      `Insufficient credits. You need $1.00, you have ${BuidlingsAuth.formatUSD(balance)}. ` +
       `Buy credits at ${result.buy_credits_url || 'https://alexiuz.com/credits'}`
     );
   }

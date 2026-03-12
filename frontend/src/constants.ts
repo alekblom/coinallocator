@@ -2,7 +2,7 @@ export const SOLANA_RPC_URL = 'https://api.devnet.solana.com';
 export const SOLANA_NETWORK = 'devnet';
 // Will be replaced with actual program ID after anchor deploy
 export const PROGRAM_ID = 'JALpaNuxgC39mZ2ct8Dg5w586k7TytktvXgHk4ixTxEg';
-export const PLATFORM_FEE = 5;
+export const PLATFORM_FEE = 1;
 export const BUIDLINGS_API = 'https://buidlings.com';
 
 // Sui constants

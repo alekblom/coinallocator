@@ -32,7 +32,7 @@ export function renderLanding(outlet: HTMLElement): void {
           <div class="feature-card">
             <div class="feature-icon">\u26a1</div>
             <h3>Deploy</h3>
-            <p>Deploy your split as a smart contract on any supported chain. One-time $5 fee, gas costs separate.</p>
+            <p>Deploy your split as a smart contract on any supported chain. One-time $1 fee, gas costs separate.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">\u2195</div>
@@ -65,7 +65,7 @@ export function renderLanding(outlet: HTMLElement): void {
 
       <section class="pricing">
         <div class="pricing-card">
-          <div class="pricing-amount text-gradient">$5</div>
+          <div class="pricing-amount text-gradient">$1</div>
           <div class="pricing-label">One-time deployment fee</div>
           <div class="pricing-features">
             <div class="pricing-feature">
