@@ -2,8 +2,6 @@
 
 Deploy smart contracts that split incoming funds across multiple wallets by percentage.
 
-**Live at [coinallocator.com](https://coinallocator.com)**
-
 ## What it does
 
 1. Connect your wallet
